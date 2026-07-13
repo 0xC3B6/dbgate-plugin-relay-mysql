@@ -39,13 +39,17 @@ Then open <http://127.0.0.1:3100>. The install command builds and copies the ext
 
 The repository launcher sets DbGate console and file logging to `warn` by default because DbGate itself includes SQL text in lower-level logs. Overriding `CONSOLE_LOG_LEVEL`, `FILE_LOG_LEVEL`, or `LOG_LEVEL` with `info`/`debug` can persist SQL outside this plugin. DbGate may also retain SQL editor/tab state as part of its normal workspace behavior, so SQL text should never contain credentials.
 
-## Add a UI-managed connection
+## Add a connection from a local profile
 
 Start DbGate without `CONNECTIONS`, `SINGLE_CONNECTION`, or other connection-injection variables, then use **+ → Connection → Relay MySQL**. DbGate 7.2.1 does not expose a plugin API for adding a separate profile-management page, so the native connection list is the profile manager: one Relay MySQL connection represents one complete Relay/SSH/MySQL route.
 
+For the shortest setup, leave **Use custom advanced Relay, SSH and MySQL settings** disabled and choose **WAF sandbox**, **ADAS sandbox**, or **Default profile** from **Connection preset / local profile**. The field also accepts another profile name typed manually. Set the default database and connect; the disabled Relay/SSH/MySQL fields below it can be ignored.
+
+## Add a fully UI-managed connection
+
 In the connection editor:
 
-1. Open **Advanced** and enable **Manage Relay, SSH and MySQL settings in this connection**.
+1. Open **Advanced** and enable **Use custom advanced Relay, SSH and MySQL settings**.
 2. Fill the relay command, one relay argument per row, prompt patterns, SSH target, and MySQL host/port.
 3. For each required credential, enter only the environment-variable name, such as `DBGATE_MYSQL_WAF_PASSWORD`—never its value.
 4. Set **Default database** on the General tab if the connection should open one database by default.
@@ -67,7 +71,7 @@ DbGate saves the non-secret routing fields and environment-variable names in its
 
 ## `profiles.json` compatibility mode
 
-Existing file-based profiles remain supported. Leave **Manage Relay, SSH and MySQL settings in this connection** disabled and set **Local profile name** to the profile key in `profiles.json`.
+Existing file-based profiles remain supported. Leave **Use custom advanced Relay, SSH and MySQL settings** disabled and select or type the profile key in **Connection preset / local profile**.
 
 Copy `config/profile.example.json` to the default private location:
 

@@ -93,18 +93,22 @@ const driver = {
   getAdvancedConnectionFields() {
     return [
       {
-        type: 'checkbox',
-        name: 'useInlineProfile',
-        label: 'Manage Relay, SSH and MySQL settings in this connection',
-        default: false,
+        type: 'dropdowntext',
+        name: 'relayProfile',
+        label: 'Connection preset / local profile',
+        default: 'default',
+        options: [
+          { name: 'WAF sandbox', value: 'waf' },
+          { name: 'ADAS sandbox', value: 'adas' },
+          { name: 'Default profile', value: 'default' },
+        ],
+        disabledFn: storedProfileDisabled,
       },
       {
-        type: 'text',
-        name: 'relayProfile',
-        label: 'Local profile name (profiles.json compatibility mode)',
-        default: 'default',
-        placeholder: 'Used when UI-managed settings are disabled',
-        disabledFn: storedProfileDisabled,
+        type: 'checkbox',
+        name: 'useInlineProfile',
+        label: 'Use custom advanced Relay, SSH and MySQL settings',
+        default: false,
       },
       {
         type: 'text',

@@ -38,8 +38,8 @@ test('frontend driver exposes a read-only Relay MySQL connection form', () => {
   assert.deepEqual(
     driver.getAdvancedConnectionFields().map(field => field.name),
     [
-      'useInlineProfile',
       'relayProfile',
+      'useInlineProfile',
       'relayCommand',
       'relayArgs',
       'relayPrompt',
@@ -58,10 +58,16 @@ test('frontend driver exposes a read-only Relay MySQL connection form', () => {
       'timeoutMs',
     ]
   );
-  assert.equal(driver.getAdvancedConnectionFields()[0].type, 'checkbox');
-  assert.equal(driver.getAdvancedConnectionFields()[0].default, false);
-  assert.equal(driver.getAdvancedConnectionFields()[1].default, 'default');
-  assert.equal(driver.getAdvancedConnectionFields()[1].disabledFn({ useInlineProfile: true }), true);
+  assert.equal(driver.getAdvancedConnectionFields()[0].type, 'dropdowntext');
+  assert.equal(driver.getAdvancedConnectionFields()[0].default, 'default');
+  assert.deepEqual(driver.getAdvancedConnectionFields()[0].options, [
+    { name: 'WAF sandbox', value: 'waf' },
+    { name: 'ADAS sandbox', value: 'adas' },
+    { name: 'Default profile', value: 'default' },
+  ]);
+  assert.equal(driver.getAdvancedConnectionFields()[0].disabledFn({ useInlineProfile: true }), true);
+  assert.equal(driver.getAdvancedConnectionFields()[1].type, 'checkbox');
+  assert.equal(driver.getAdvancedConnectionFields()[1].default, false);
   assert.equal(driver.getAdvancedConnectionFields()[2].disabledFn({ useInlineProfile: false }), true);
   assert.equal(driver.getAdvancedConnectionFields()[2].disabledFn({ useInlineProfile: true }), false);
 });

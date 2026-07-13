@@ -64,9 +64,16 @@ test('DbGate manages an inline relay profile and renders query results', async (
     .selectOption('relay-mysql@dbgate-plugin-relay-mysql');
   await connectionTab.getByTestId('ConnectionTab_tabAdvanced').click();
 
+  const profilePicker = connectionTab
+    .locator('.largeFormMarker')
+    .filter({ hasText: 'Connection preset / local profile' })
+    .locator('input');
+  await expect(profilePicker).toBeEnabled();
+  await expect(profilePicker).toHaveValue('default');
+
   const profileToggleRow = connectionTab
     .locator('.largeFormMarker')
-    .filter({ hasText: 'Manage Relay, SSH and MySQL settings in this connection' });
+    .filter({ hasText: 'Use custom advanced Relay, SSH and MySQL settings' });
   const profileToggle = profileToggleRow.locator('input[type="checkbox"]');
   await expect(profileToggle).not.toBeChecked();
   await profileToggle.check();
@@ -75,12 +82,8 @@ test('DbGate manages an inline relay profile and renders query results', async (
     .locator('.largeFormMarker')
     .filter({ hasText: 'Relay · command' })
     .locator('input');
-  const localProfileName = connectionTab
-    .locator('.largeFormMarker')
-    .filter({ hasText: 'Local profile name' })
-    .locator('input');
   await expect(relayCommand).toBeEnabled();
-  await expect(localProfileName).toBeDisabled();
+  await expect(profilePicker).toBeDisabled();
   await expect(connectionTab.getByTestId('ConnectionTab_buttonConnect')).toBeEnabled();
 
   const accessToken = await page.evaluate(() => localStorage.getItem('accessToken'));
