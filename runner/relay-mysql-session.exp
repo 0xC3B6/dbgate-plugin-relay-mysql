@@ -1,0 +1,141 @@
+#!/usr/bin/expect -f
+
+package require base64
+log_user 0
+match_max -d 65536
+
+proc read_frame {} {
+  if {[gets stdin line] < 0} { exit 15 }
+  if {![regexp {^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$} $line]} {
+    exit 15
+  }
+  return $line
+}
+
+proc decode_frame {frame} {
+  return [encoding convertfrom utf-8 [::base64::decode $frame]]
+}
+
+proc read_sql_frame {} {
+  set frame [read_frame]
+  if {[string length [::base64::decode $frame]] > 2048} { exit 15 }
+  return $frame
+}
+
+set protocolVersion [decode_frame [read_frame]]
+set relayCommand [decode_frame [read_frame]]
+set relayArgsText [decode_frame [read_frame]]
+set relayPrompt [decode_frame [read_frame]]
+set relayPasswordPrompt [decode_frame [read_frame]]
+set relayPasswordFrame [read_frame]
+set sshTarget [decode_frame [read_frame]]
+set sshPrompt [decode_frame [read_frame]]
+set sshPasswordPrompt [decode_frame [read_frame]]
+set sshPasswordFrame [read_frame]
+set mysqlCommandFrame [read_frame]
+set mysqlHostFrame [read_frame]
+set mysqlPortFrame [read_frame]
+set mysqlUserFrame [read_frame]
+set mysqlPasswordFrame [read_frame]
+set remoteScriptFrame [read_frame]
+
+if {$protocolVersion ne "1"} { exit 15 }
+
+set relayArgs {}
+if {$relayArgsText ne ""} { set relayArgs [split $relayArgsText "\n"] }
+
+set timeout 360
+if {[catch {spawn -noecho $relayCommand {*}$relayArgs}]} { exit 10 }
+
+expect {
+  -re $relayPrompt {}
+  -re $relayPasswordPrompt {
+    if {$relayPasswordFrame eq ""} { exit 10 }
+    send -- "[decode_frame $relayPasswordFrame]\r"
+    exp_continue
+  }
+  eof { exit 10 }
+  timeout { exit 14 }
+}
+
+send -- "ssh -- $sshTarget\r"
+expect {
+  -re $sshPrompt {}
+  -re $sshPasswordPrompt {
+    if {$sshPasswordFrame eq ""} { exit 11 }
+    send -- "[decode_frame $sshPasswordFrame]\r"
+    exp_continue
+  }
+  -re {(?i)(permission denied|connection refused|host key verification failed|authenticity of host)} { exit 11 }
+  eof { exit 11 }
+  timeout { exit 14 }
+}
+
+puts stdout "__DBGATE_SESSION_READY__"
+flush stdout
+
+while {1} {
+  set nonce [decode_frame [read_frame]]
+  set databaseFrame [read_frame]
+  set sqlChunkCountFrame [read_frame]
+  set sqlChunkCount [decode_frame $sqlChunkCountFrame]
+
+  if {![regexp {^[a-f0-9]{32}$} $nonce]} { exit 15 }
+  if {![regexp {^(?:0|[1-9][0-9]{0,4})$} $sqlChunkCount]} { exit 15 }
+  scan $sqlChunkCount %d sqlChunkCountValue
+  if {$sqlChunkCountValue > 16384} { exit 15 }
+  set sqlChunkCount $sqlChunkCountValue
+
+  set readyMarker "__DBGATE_RELAY_MYSQL_${nonce}_READY__"
+  set beginMarker "__DBGATE_RELAY_MYSQL_${nonce}_XML_BEGIN__"
+  set endMarker "__DBGATE_RELAY_MYSQL_${nonce}_XML_END__"
+  set okMarker "__DBGATE_RELAY_MYSQL_${nonce}_STATUS__OK"
+  set localBegin "__DBGATE_RUNNER_${nonce}_BEGIN__\n"
+
+  send -- "bash -c \"\$(printf '%s' '$remoteScriptFrame' | base64 -d)\" dbgate-relay '$nonce'\r"
+  expect {
+    -exact $readyMarker {}
+    eof { exit 11 }
+    timeout { exit 14 }
+  }
+
+  foreach frame [list $mysqlCommandFrame $mysqlHostFrame $mysqlPortFrame $mysqlUserFrame $mysqlPasswordFrame $databaseFrame $sqlChunkCountFrame] {
+    send -- "$frame\r"
+  }
+
+  expect {
+    -exact $beginMarker {
+      puts -nonewline stdout $localBegin
+      flush stdout
+      log_file -a -noappend /dev/stdout
+      set send_slow {256 0.001}
+      for {set index 0} {$index < $sqlChunkCount} {incr index} {
+        set frame [read_sql_frame]
+        send -s -- "$frame\r"
+      }
+      expect {
+        -exact $endMarker { log_file }
+        eof { log_file; exit 11 }
+        timeout { log_file; exit 14 }
+      }
+      expect {
+        -exact $okMarker { set resultCategory "OK" }
+        -re "__DBGATE_RELAY_MYSQL_${nonce}_ERROR__(mysql_connection|sql_error)" {
+          set resultCategory $expect_out(1,string)
+        }
+        eof { exit 11 }
+        timeout { exit 14 }
+      }
+    }
+    eof { exit 11 }
+    timeout { exit 14 }
+  }
+
+  expect {
+    -re $sshPrompt {}
+    eof { exit 11 }
+    timeout { exit 14 }
+  }
+  puts stdout "\n__DBGATE_SESSION_${nonce}_RESULT__${resultCategory}"
+  flush stdout
+}

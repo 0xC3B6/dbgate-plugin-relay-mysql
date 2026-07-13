@@ -38,7 +38,8 @@ function createHarness(overrides = {}) {
 }
 
 const dbhan = {
-  relayProfile: 'fixture-profile', runnerPath: '/synthetic/runner', database: 'fixture_db', timeoutMs: 30000,
+  relayProfile: 'fixture-profile', profileFile: '/private/inline-profile.json',
+  runnerPath: '/synthetic/runner', database: 'fixture_db', timeoutMs: 30000, persistentSession: true,
 };
 
 test('manual execution sends prepared SQL only over runner stdin input', async () => {
@@ -46,6 +47,8 @@ test('manual execution sends prepared SQL only over runner stdin input', async (
   const result = await executor.executeManual(dbhan, 'SELECT 1', { collectRows: true });
   assert.equal(calls.runner[0].sql, 'SELECT 1 LIMIT 5001');
   assert.equal(calls.runner[0].runnerPath, '/synthetic/runner');
+  assert.equal(calls.runner[0].profileFile, '/private/inline-profile.json');
+  assert.equal(calls.runner[0].persistentSession, true);
   assert.equal(calls.parser[0].options.maxRows, 5000);
   assert.equal(result.queryId, 'query-abc123');
   assert.deepEqual(result.rows, [{ value: '1' }]);

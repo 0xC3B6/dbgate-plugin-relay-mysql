@@ -38,5 +38,5 @@ test('source and build configuration expose frontend, backend, and runner entrie
   }
 
   const webpackConfig = require('../../webpack-backend.config');
-  assert.deepEqual(Object.keys(webpackConfig.entry).sort(), ['backend', 'runner']);
+  assert.deepEqual(Object.keys(webpackConfig.entry).sort(), ['backend', 'broker', 'runner']);
 });

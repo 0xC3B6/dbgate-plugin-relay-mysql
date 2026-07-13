@@ -35,7 +35,9 @@ test('local installation requires both relay runtime adapters', t => {
   t.after(() => fs.rmSync(pluginDirectory, { recursive: true, force: true }));
 
   assert.ok(REQUIRED_INSTALLED_FILES.includes('bin/relay-mysql-runner.js'));
+  assert.ok(REQUIRED_INSTALLED_FILES.includes('dist/broker.js'));
   assert.ok(REQUIRED_INSTALLED_FILES.includes('runner/relay-mysql.exp'));
+  assert.ok(REQUIRED_INSTALLED_FILES.includes('runner/relay-mysql-session.exp'));
 
   for (const relative of REQUIRED_INSTALLED_FILES) {
     fs.mkdirSync(path.dirname(path.join(pluginDirectory, relative)), { recursive: true });

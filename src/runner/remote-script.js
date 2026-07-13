@@ -11,6 +11,7 @@ case "$nonce" in
   ''|*[!A-Fa-f0-9-]*) exit 15 ;;
 esac
 
+original_stty="$(stty -g 2>/dev/null || true)"
 stty -echo -onlcr -icanon min 1 time 0 2>/dev/null || true
 marker="__DBGATE_RELAY_MYSQL_\${nonce}"
 printf '%s_READY__\\n' "$marker"
@@ -49,6 +50,9 @@ error_file="$(mktemp "\${TMPDIR:-/tmp}/dbgate-relay-error.XXXXXX")" || {
   exit 15
 }
 cleanup() {
+  if [ -n "$original_stty" ]; then
+    stty "$original_stty" 2>/dev/null || true
+  fi
   rm -f "$error_file"
 }
 trap cleanup EXIT HUP INT TERM

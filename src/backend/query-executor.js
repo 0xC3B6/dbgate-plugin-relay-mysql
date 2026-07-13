@@ -28,7 +28,9 @@ class QueryExecutor {
     const runnerResult = await this.runnerClient.run({
       runnerPath: dbhan.runnerPath,
       relayProfile: dbhan.relayProfile,
+      profileFile: dbhan.profileFile,
       database: dbhan.database,
+      persistentSession: dbhan.persistentSession,
       timeoutMs: dbhan.timeoutMs,
       sql: prepared.sql,
       signal: options.signal,

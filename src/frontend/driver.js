@@ -46,7 +46,16 @@ const STRIPPED_CONNECTION_FIELDS = [
   'endpoint',
   'awsRegion',
   'defaultIsolationLevel',
+  'relayPassword',
+  'sshPassword',
+  'mysqlUser',
+  'mysqlPassword',
+  'profileFile',
+  'inlineProfileFile',
 ];
+
+const inlineProfileDisabled = values => values?.useInlineProfile !== true;
+const storedProfileDisabled = values => values?.useInlineProfile === true;
 
 const dialect = {
   ...(driverBase.dialect || {}),
@@ -84,11 +93,120 @@ const driver = {
   getAdvancedConnectionFields() {
     return [
       {
-        type: 'text',
+        type: 'dropdowntext',
         name: 'relayProfile',
-        label: 'Relay profile',
+        label: 'Connection preset / local profile',
         default: 'default',
-        placeholder: 'Profile resolved by the local runner',
+        options: [
+          { name: 'WAF sandbox', value: 'waf' },
+          { name: 'ADAS sandbox', value: 'adas' },
+          { name: 'Default profile', value: 'default' },
+        ],
+        disabledFn: storedProfileDisabled,
+      },
+      {
+        type: 'checkbox',
+        name: 'useInlineProfile',
+        label: 'Use custom advanced Relay, SSH and MySQL settings',
+        default: false,
+      },
+      {
+        type: 'text',
+        name: 'relayCommand',
+        label: 'Relay · command',
+        placeholder: '/path/to/relay-cli',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'stringlist',
+        name: 'relayArgs',
+        label: 'Relay · arguments (one per row)',
+        addButtonLabel: 'Add relay argument',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'relayPrompt',
+        label: 'Relay · ready prompt regular expression',
+        placeholder: 'RELAY> \\$',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'relayPasswordPrompt',
+        label: 'Relay · password prompt regular expression',
+        default: '(?i)password:',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'relayPasswordEnv',
+        label: 'Relay · password environment variable (optional)',
+        placeholder: 'DBGATE_RELAY_PASSWORD',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'sshTarget',
+        label: 'SSH · target executed inside Relay',
+        placeholder: 'reader@sandbox.example.invalid',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'sshPrompt',
+        label: 'SSH · ready prompt regular expression',
+        placeholder: 'REMOTE> \\$',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'sshPasswordPrompt',
+        label: 'SSH · password prompt regular expression',
+        default: '(?i)password:',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'sshPasswordEnv',
+        label: 'SSH · password environment variable (optional)',
+        placeholder: 'DBGATE_SSH_PASSWORD',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'mysqlCommand',
+        label: 'MySQL · remote command',
+        default: 'mysql',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'mysqlHost',
+        label: 'MySQL · host as seen from the SSH server',
+        placeholder: '127.0.0.1',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'number',
+        name: 'mysqlPort',
+        label: 'MySQL · port',
+        default: 3306,
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'mysqlUserEnv',
+        label: 'MySQL · user environment variable',
+        placeholder: 'DBGATE_MYSQL_USER',
+        disabledFn: inlineProfileDisabled,
+      },
+      {
+        type: 'text',
+        name: 'mysqlPasswordEnv',
+        label: 'MySQL · password environment variable',
+        placeholder: 'DBGATE_MYSQL_PASSWORD',
+        disabledFn: inlineProfileDisabled,
       },
       {
         type: 'text',

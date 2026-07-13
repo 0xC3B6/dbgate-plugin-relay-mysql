@@ -4,7 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
 const frontendDriver = require('../frontend/driver');
+const { ProfileError } = require('../runner/profile-store');
 const { RelayMysqlError } = require('./errors');
+const { createInlineProfileFile: createInlineProfileFileDefault } = require('./inline-profile-file');
 const { MetadataCache } = require('./metadata-cache');
 const { MetadataSnapshotService, SYSTEM_DATABASES } = require('./metadata-snapshot');
 const { QueryExecutor } = require('./query-executor');
@@ -44,6 +46,7 @@ function createBackendDriver(dependencies = {}) {
   const metadataCache = dependencies.metadataCache || new MetadataCache();
   const metadataService =
     dependencies.metadataService || new MetadataSnapshotService({ queryExecutor, cache: metadataCache });
+  const createInlineProfileFile = dependencies.createInlineProfileFile || createInlineProfileFileDefault;
 
   return {
     ...backendDriverBase,
@@ -54,17 +57,42 @@ function createBackendDriver(dependencies = {}) {
     },
 
     async connect(props = {}) {
-      const relayProfile = String(props.relayProfile || '').trim();
-      if (!relayProfile) {
-        throw new RelayMysqlError('relay_login', 'Relay profile is required');
-      }
-      const runnerPath = String(props.runnerPath || '').trim() || resolveDefaultRunnerPath();
+      const configuredRunnerPath = String(props.runnerPath || '').trim();
+      const runnerPath = configuredRunnerPath || resolveDefaultRunnerPath();
+      const persistentSession = !configuredRunnerPath;
       const timeoutMs = normalizeTimeout(props.timeoutMs);
-      const client = { relayProfile, runnerPath, timeoutMs };
+      let relayProfile;
+      let profileFile;
+      let cleanupProfile;
+
+      if (props.useInlineProfile === true) {
+        let inlineProfile;
+        try {
+          inlineProfile = createInlineProfileFile(props);
+        } catch (error) {
+          const message = error instanceof ProfileError
+            ? error.message
+            : 'UI-managed Relay profile could not be prepared';
+          throw new RelayMysqlError('runner', message);
+        }
+        relayProfile = inlineProfile.profileName;
+        profileFile = inlineProfile.filePath;
+        cleanupProfile = inlineProfile.cleanup;
+      } else {
+        relayProfile = String(props.relayProfile || '').trim();
+        if (!relayProfile) {
+          throw new RelayMysqlError('relay_login', 'Relay profile is required');
+        }
+      }
+
+      const client = { persistentSession, relayProfile, runnerPath, timeoutMs };
       return {
         client,
+        cleanupProfile,
         conid: props.conid,
         database: props.database || props.defaultDatabase || null,
+        profileFile,
+        persistentSession,
         relayProfile,
         runnerPath,
         timeoutMs,
@@ -73,7 +101,16 @@ function createBackendDriver(dependencies = {}) {
     },
 
     async close(dbhan) {
-      if (dbhan) dbhan.closed = true;
+      if (!dbhan) return;
+      dbhan.closed = true;
+      const cleanupProfile = dbhan.cleanupProfile;
+      dbhan.cleanupProfile = null;
+      try {
+        cleanupProfile?.();
+      } catch (_error) {
+        // Best-effort cleanup must not prevent DbGate from closing the
+        // logical connection.
+      }
     },
 
     async query(dbhan, sql, options = {}) {
@@ -163,22 +200,18 @@ function createBackendDriver(dependencies = {}) {
       return pass;
     },
 
-    async getVersion(dbhan) {
-      const result = await queryExecutor.executeInternal(dbhan, 'SELECT VERSION() AS version', {
-        maxRows: 1,
-        collectRows: true,
-      });
-      const version = firstRowValue(result.rows?.[0], ['version', 'VERSION()']);
-      if (version == null) {
-        throw new RelayMysqlError('mysql_connection', 'MySQL version query returned no result');
-      }
+    async getVersion() {
+      // DbGate polls this method in the background. A real version query would
+      // create a Relay login (and therefore a Touch ID prompt) even when the
+      // user is not querying data.
       return {
-        version: String(version),
-        versionText: `MySQL ${String(version)} through Relay`,
+        version: 'relay-session',
+        versionText: 'MySQL through persistent Relay session',
       };
     },
 
     async listDatabases(dbhan) {
+      if (dbhan.database) return [{ name: String(dbhan.database) }];
       const result = await queryExecutor.executeInternal(dbhan, 'SHOW DATABASES', {
         maxRows: null,
         collectRows: true,

@@ -3,6 +3,7 @@ set -u
 
 if [ -n "${HOME:-}" ]; then
   printf '%s' "$$" >"${HOME}/relay.pid"
+  printf 'start\n' >>"${HOME}/relay-starts.txt"
 fi
 
 case "${1:-ok}" in

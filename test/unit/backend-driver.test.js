@@ -50,9 +50,24 @@ function createHarness() {
       return metadataFresh;
     },
   };
+  const inlineProfiles = [];
+  const createInlineProfileFile = connection => {
+    const profile = {
+      connection,
+      filePath: `/private/profile-${inlineProfiles.length + 1}.json`,
+      profileName: 'inline',
+      cleaned: false,
+      cleanup() {
+        profile.cleaned = true;
+      },
+    };
+    inlineProfiles.push(profile);
+    return profile;
+  };
   return {
     calls,
-    driver: createBackendDriver({ queryExecutor, metadataService, runnerClient: {} }),
+    driver: createBackendDriver({ queryExecutor, metadataService, runnerClient: {}, createInlineProfileFile }),
+    inlineProfiles,
     expireMetadata() {
       metadataFresh = false;
     },
@@ -69,15 +84,16 @@ test('backend driver creates and closes a logical one-shot handle', async () => 
     {
       conid: handle.conid, relayProfile: handle.relayProfile, runnerPath: handle.runnerPath,
       database: handle.database, timeoutMs: handle.timeoutMs, password: handle.password,
+      persistentSession: handle.persistentSession,
     },
     {
       conid: 'fixture', relayProfile: 'profile', runnerPath: '/synthetic/runner',
-      database: 'fixture_db', timeoutMs: 1234, password: undefined,
+      database: 'fixture_db', timeoutMs: 1234, password: undefined, persistentSession: false,
     }
   );
   assert.equal(handle.closed, false);
   assert.deepEqual(handle.client, {
-    relayProfile: 'profile', runnerPath: '/synthetic/runner', timeoutMs: 1234,
+    persistentSession: false, relayProfile: 'profile', runnerPath: '/synthetic/runner', timeoutMs: 1234,
   });
   await driver.close(handle);
   assert.equal(handle.closed, true);
@@ -92,9 +108,37 @@ test('backend driver rejects missing profile and invalid timeout without startin
   );
 });
 
-test('query routes DbGate ranges through table-data policy and filters system databases', async () => {
+test('backend driver materializes and cleans an inline connection profile', async () => {
+  const { driver, inlineProfiles } = createHarness();
+  const handle = await driver.connect({
+    conid: 'inline-fixture',
+    useInlineProfile: true,
+    relayCommand: '/safe/relay-cli',
+    relayArgs: ['login'],
+    relayPrompt: 'RELAY> $',
+    sshTarget: 'reader@example.invalid',
+    sshPrompt: 'REMOTE> $',
+    mysqlHost: '127.0.0.1',
+    mysqlUserEnv: 'TEST_MYSQL_USER',
+    mysqlPasswordEnv: 'TEST_MYSQL_PASSWORD',
+  });
+
+  assert.equal(inlineProfiles.length, 1);
+  assert.equal(handle.relayProfile, 'inline');
+  assert.equal(handle.profileFile, '/private/profile-1.json');
+  assert.equal(handle.client.profileFile, undefined);
+  assert.equal(inlineProfiles[0].cleaned, false);
+  await driver.close(handle);
+  assert.equal(inlineProfiles[0].cleaned, true);
+  await driver.close(handle);
+  assert.equal(inlineProfiles[0].cleaned, true);
+});
+
+test('query routes DbGate ranges while background version and database probes stay local', async () => {
   const { calls, driver } = createHarness();
-  const handle = await driver.connect({ relayProfile: 'profile', runnerPath: '/synthetic/runner' });
+  const handle = await driver.connect({
+    relayProfile: 'profile', runnerPath: '/synthetic/runner', defaultDatabase: 'fixture_db',
+  });
   const dumper = driver.createDumper();
   dumper.put('^select * ^from %i', 'wide_table');
   assert.match(dumper.s, /select \* from `wide_table`/i);
@@ -110,9 +154,9 @@ test('query routes DbGate ranges through table-data policy and filters system da
     range,
     snapshot: handle.metadataSnapshot,
   });
-  assert.equal((await driver.getVersion(handle)).version, '5.7.24-fixture');
+  assert.equal((await driver.getVersion(handle)).version, 'relay-session');
   assert.deepEqual(await driver.listDatabases(handle), [{ name: 'fixture_db' }]);
-  assert.deepEqual(calls.internal, ['SELECT VERSION() AS version', 'SHOW DATABASES']);
+  assert.deepEqual(calls.internal, []);
 });
 
 test('full analysis forces refresh while incremental analysis observes TTL cache', async () => {

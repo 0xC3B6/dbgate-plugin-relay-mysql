@@ -10,9 +10,11 @@ const REQUIRED_INSTALLED_FILES = Object.freeze([
   'package.json',
   'dist/frontend.js',
   'dist/backend.js',
+  'dist/broker.js',
   'dist/runner.js',
   'bin/relay-mysql-runner.js',
   'runner/relay-mysql.exp',
+  'runner/relay-mysql-session.exp',
 ]);
 
 function run(command, args, options = {}) {

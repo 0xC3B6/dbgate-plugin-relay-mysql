@@ -16,7 +16,9 @@ test('remote script uses fixed read-only mysql XML invocation', () => {
 
 test('remote script disables terminal echo before requesting secret frames', () => {
   const script = buildRemoteScript();
+  assert.match(script, /original_stty="\$\(stty -g/);
   assert.ok(script.indexOf('stty -echo') < script.indexOf('mysql_password="$decoded_frame"'));
+  assert.match(script, /stty "\$original_stty"/);
   assert.doesNotMatch(script, /result_file|dbgate-relay-result/);
   assert.doesNotMatch(script, /select 1|example-password/i);
 });
