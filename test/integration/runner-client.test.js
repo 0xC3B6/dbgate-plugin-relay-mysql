@@ -61,6 +61,24 @@ test('runner client passes an inline profile file only through the dedicated run
   assert.equal(calls[0].args[index + 1], profileFile);
 });
 
+test('runner client delegates bundled persistent sessions to the broker', async () => {
+  const calls = [];
+  const client = new RunnerClient({
+    randomUUID: () => 'request-fixture',
+    brokerClient: {
+      async run(options) {
+        calls.push(options);
+        return { queryId: options.requestId, stdout: Buffer.from('<resultset/>'), exitCode: 0 };
+      },
+    },
+  });
+  const result = await run(client, { persistentSession: true });
+  assert.equal(result.queryId, 'request-fixture');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].requestId, 'request-fixture');
+  assert.equal(calls[0].sql, "SELECT 'stdin-only-marker' AS transport");
+});
+
 test('runner client maps structured runner failures without exposing stderr JSON', async () => {
   const client = new RunnerClient({ prefixArgs: [fixture], randomUUID: () => 'request-fixture' });
   await assert.rejects(

@@ -1,8 +1,8 @@
 # DbGate Relay MySQL Plugin
 
-`dbgate-plugin-relay-mysql` is a read-only external driver for DbGate Web 7.2.1. It keeps the existing one-shot access path—local `relay-cli`, an interactive relay shell, SSH, and the remote `mysql` CLI—while reusing DbGate's database tree, SQL editor, and data grid.
+`dbgate-plugin-relay-mysql` is a read-only external driver for DbGate Web 7.2.1. It keeps the existing access path—local `relay-cli`, an interactive relay shell, SSH, and the remote `mysql` CLI—while reusing DbGate's database tree, SQL editor, and data grid.
 
-The plugin never opens a direct MySQL TCP connection. Each request starts a fresh relay/SSH/MySQL chain and asks the remote client for XML, so wide results can be rendered as a normal horizontally scrollable, resizable grid instead of an ASCII table.
+The plugin never opens a direct MySQL TCP connection. With the bundled runner, a private local broker keeps one Relay/SSH session per complete profile and starts only the remote `mysql --xml` command for each query. The session is recycled after one hour without a query. This makes wide results render as a normal horizontally scrollable, resizable grid without requiring Touch ID for every query.
 
 ## MVP features
 
@@ -55,6 +55,8 @@ In the connection editor:
 4. Set **Default database** on the General tab if the connection should open one database by default.
 5. Use **Test**, then **Save** or **Connect**.
 
+DbGate may satisfy **Test** from the plugin's local configuration without opening Relay, specifically to avoid background Touch ID prompts. Expanding the database tree or running the first `SELECT 1` is the authoritative end-to-end route check.
+
 Export the named secret values in the shell that starts DbGate:
 
 ```bash
@@ -99,9 +101,9 @@ To keep the profile elsewhere, set `DBGATE_RELAY_MYSQL_PROFILE_FILE` to its abso
 
 The remaining connection settings are the same in both modes:
 
-- **Default database** is optional. Leaving it empty lets the left tree list every permitted non-system database.
-- **Runner executable path** is normally empty, which uses the bundled runner.
-- **Query timeout** defaults to 30,000 ms and covers the complete one-shot chain.
+- **Default database** is optional. When set, DbGate lists only that database and avoids a background `SHOW DATABASES`. Leaving it empty discovers every permitted non-system database when the connection is first used.
+- **Runner executable path** is normally empty, which uses the bundled persistent-session broker. A custom runner path retains the legacy one-shot behavior.
+- **Query timeout** defaults to 30,000 ms. It includes Relay/SSH authentication when a new session is needed and the remote MySQL execution.
 
 The form deliberately has no relay, SSH, or MySQL password-value fields. Separate DbGate connections may use separate routing settings and environment-variable names.
 
@@ -131,7 +133,7 @@ Exactly one statement is accepted. Write statements, DDL, `CALL`, `SET`, `USE`, 
 
 A manual `SELECT` without a top-level limit is executed with a 5,001-row probe; only 5,000 rows are shown. An explicit limit above 5,000 is rejected. Table tabs are separate: DbGate sends `LIMIT 100 OFFSET n` by default and the plugin adds deterministic primary-key ordering when metadata supplies a primary key.
 
-Cancellation is local and best effort. A timed-out remote query may continue briefly until the SSH/relay process closes or MySQL terminates it. The one-shot relay and SSH setup is expected to dominate small-query latency.
+Cancellation is local and best effort. Cancelling or timing out a query destroys its Relay/SSH session so that the remote process cannot be reused; the next query authenticates again. MySQL and SQL errors keep a healthy session available. A session also authenticates again after one hour idle, a network disconnect, a broker/DbGate restart, or a profile change.
 
 ## Verify
 
@@ -157,6 +159,7 @@ Use `--profile-file /absolute/path/profiles.json`, `--timeout-ms 30000`, or `--r
 - Success stdout is complete XML only; failure stdout is empty and stderr is one sanitized JSON object.
 - SQL is sent to the runner over stdin in bounded Base64 frames, never in its process arguments.
 - Relay, SSH, and MySQL credential values are not stored in DbGate connection records; UI-managed records contain only environment-variable names.
+- The persistent broker uses a user-owned `0700` runtime directory and a `0600` Unix socket. Credential values exist only in the broker environment and live session memory.
 - Raw PTY transcripts, SQL, XML, result values, and credentials are not logged by this plugin.
 - The remote mysql process receives its password through `MYSQL_PWD`; this avoids argv exposure but is not a substitute for a least-privilege account.
 - Binary values and XML-invalid control bytes are unsupported in the MVP. Query binary values explicitly with `HEX(column)`.

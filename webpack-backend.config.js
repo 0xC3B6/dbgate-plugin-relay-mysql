@@ -7,6 +7,7 @@ module.exports = {
   context: __dirname,
   entry: {
     backend: './src/backend/index.js',
+    broker: './src/broker/server.js',
     runner: './src/runner/cli.js',
   },
   target: 'node',
@@ -16,4 +17,3 @@ module.exports = {
     libraryTarget: 'commonjs2',
   },
 };
-

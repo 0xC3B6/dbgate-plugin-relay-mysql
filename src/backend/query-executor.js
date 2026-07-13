@@ -30,6 +30,7 @@ class QueryExecutor {
       relayProfile: dbhan.relayProfile,
       profileFile: dbhan.profileFile,
       database: dbhan.database,
+      persistentSession: dbhan.persistentSession,
       timeoutMs: dbhan.timeoutMs,
       sql: prepared.sql,
       signal: options.signal,

@@ -84,15 +84,16 @@ test('backend driver creates and closes a logical one-shot handle', async () => 
     {
       conid: handle.conid, relayProfile: handle.relayProfile, runnerPath: handle.runnerPath,
       database: handle.database, timeoutMs: handle.timeoutMs, password: handle.password,
+      persistentSession: handle.persistentSession,
     },
     {
       conid: 'fixture', relayProfile: 'profile', runnerPath: '/synthetic/runner',
-      database: 'fixture_db', timeoutMs: 1234, password: undefined,
+      database: 'fixture_db', timeoutMs: 1234, password: undefined, persistentSession: false,
     }
   );
   assert.equal(handle.closed, false);
   assert.deepEqual(handle.client, {
-    relayProfile: 'profile', runnerPath: '/synthetic/runner', timeoutMs: 1234,
+    persistentSession: false, relayProfile: 'profile', runnerPath: '/synthetic/runner', timeoutMs: 1234,
   });
   await driver.close(handle);
   assert.equal(handle.closed, true);
@@ -133,9 +134,11 @@ test('backend driver materializes and cleans an inline connection profile', asyn
   assert.equal(inlineProfiles[0].cleaned, true);
 });
 
-test('query routes DbGate ranges through table-data policy and filters system databases', async () => {
+test('query routes DbGate ranges while background version and database probes stay local', async () => {
   const { calls, driver } = createHarness();
-  const handle = await driver.connect({ relayProfile: 'profile', runnerPath: '/synthetic/runner' });
+  const handle = await driver.connect({
+    relayProfile: 'profile', runnerPath: '/synthetic/runner', defaultDatabase: 'fixture_db',
+  });
   const dumper = driver.createDumper();
   dumper.put('^select * ^from %i', 'wide_table');
   assert.match(dumper.s, /select \* from `wide_table`/i);
@@ -151,9 +154,9 @@ test('query routes DbGate ranges through table-data policy and filters system da
     range,
     snapshot: handle.metadataSnapshot,
   });
-  assert.equal((await driver.getVersion(handle)).version, '5.7.24-fixture');
+  assert.equal((await driver.getVersion(handle)).version, 'relay-session');
   assert.deepEqual(await driver.listDatabases(handle), [{ name: 'fixture_db' }]);
-  assert.deepEqual(calls.internal, ['SELECT VERSION() AS version', 'SHOW DATABASES']);
+  assert.deepEqual(calls.internal, []);
 });
 
 test('full analysis forces refresh while incremental analysis observes TTL cache', async () => {

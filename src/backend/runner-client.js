@@ -2,6 +2,7 @@
 
 const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
+const { BrokerClient } = require('./broker-client');
 const { RelayMysqlError } = require('./errors');
 
 const DEFAULT_STDOUT_LIMIT = 32 * 1024 * 1024;
@@ -70,12 +71,16 @@ class RunnerClient {
     this.prefixArgs = Array.isArray(options.prefixArgs) ? [...options.prefixArgs] : [];
     this.maxStdoutBytes = options.maxStdoutBytes ?? DEFAULT_STDOUT_LIMIT;
     this.maxStderrBytes = options.maxStderrBytes ?? DEFAULT_STDERR_LIMIT;
+    this.brokerClient = options.brokerClient || new BrokerClient();
   }
 
   run(options) {
     const queryId = options.requestId || this.randomUUID();
     const requestedTimeout = Number(options.timeoutMs || DEFAULT_TIMEOUT_MS);
     const timeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout > 0 ? requestedTimeout : DEFAULT_TIMEOUT_MS;
+    if (options.persistentSession) {
+      return this.brokerClient.run({ ...options, requestId: queryId, timeoutMs });
+    }
     const args = [
       ...this.prefixArgs,
       '--protocol-version',

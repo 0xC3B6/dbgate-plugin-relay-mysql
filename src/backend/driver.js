@@ -57,7 +57,9 @@ function createBackendDriver(dependencies = {}) {
     },
 
     async connect(props = {}) {
-      const runnerPath = String(props.runnerPath || '').trim() || resolveDefaultRunnerPath();
+      const configuredRunnerPath = String(props.runnerPath || '').trim();
+      const runnerPath = configuredRunnerPath || resolveDefaultRunnerPath();
+      const persistentSession = !configuredRunnerPath;
       const timeoutMs = normalizeTimeout(props.timeoutMs);
       let relayProfile;
       let profileFile;
@@ -83,13 +85,14 @@ function createBackendDriver(dependencies = {}) {
         }
       }
 
-      const client = { relayProfile, runnerPath, timeoutMs };
+      const client = { persistentSession, relayProfile, runnerPath, timeoutMs };
       return {
         client,
         cleanupProfile,
         conid: props.conid,
         database: props.database || props.defaultDatabase || null,
         profileFile,
+        persistentSession,
         relayProfile,
         runnerPath,
         timeoutMs,
@@ -197,22 +200,18 @@ function createBackendDriver(dependencies = {}) {
       return pass;
     },
 
-    async getVersion(dbhan) {
-      const result = await queryExecutor.executeInternal(dbhan, 'SELECT VERSION() AS version', {
-        maxRows: 1,
-        collectRows: true,
-      });
-      const version = firstRowValue(result.rows?.[0], ['version', 'VERSION()']);
-      if (version == null) {
-        throw new RelayMysqlError('mysql_connection', 'MySQL version query returned no result');
-      }
+    async getVersion() {
+      // DbGate polls this method in the background. A real version query would
+      // create a Relay login (and therefore a Touch ID prompt) even when the
+      // user is not querying data.
       return {
-        version: String(version),
-        versionText: `MySQL ${String(version)} through Relay`,
+        version: 'relay-session',
+        versionText: 'MySQL through persistent Relay session',
       };
     },
 
     async listDatabases(dbhan) {
+      if (dbhan.database) return [{ name: String(dbhan.database) }];
       const result = await queryExecutor.executeInternal(dbhan, 'SHOW DATABASES', {
         maxRows: null,
         collectRows: true,
