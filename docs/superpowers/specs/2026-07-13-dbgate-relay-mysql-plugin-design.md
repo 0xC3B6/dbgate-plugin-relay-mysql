@@ -21,7 +21,7 @@ The MVP must provide:
 - A left-side browser for permitted databases, tables, and columns.
 - A SQL editor for read-only, single-statement queries.
 - A result grid with horizontal scrolling and resizable columns, supplied by DbGate.
-- A paginated table-data grid when a table is opened, with 100 rows per page.
+- DbGate's table-data grid when a table is opened, with its default 100-row incremental load size. This is an infinite-scroll grid rather than a numbered-page control, and DbGate allows the user to change the load size.
 - Reliable handling of `NULL`, XML-escaped text, newlines, and tab characters.
 - A fixed 32 MiB maximum for one XML result stream in addition to the row limit.
 - Clear relay, SSH, MySQL connection, SQL, timeout, and result-parsing errors.
@@ -116,7 +116,7 @@ The runner protocol is:
 - stderr on failure: one UTF-8 JSON object with `version`, `category`, `message`, and `retryable` fields. The message is sanitized and contains no raw command or query text.
 - exit status: zero for success and nonzero for failure.
 
-Raw PTY transcripts are never forwarded to application logs. The runner extracts only output between explicit result markers so echoed remote commands, prompts, and credentials cannot enter the result parser.
+Raw PTY transcripts are never forwarded to application logs. The runner extracts only output between explicit result markers so echoed remote commands, prompts, and credentials cannot enter the result parser. To keep the version 1 protocol atomic, the runner buffers at most 32 MiB of extracted XML in memory and writes it to stdout only after the relay process exits successfully; on failure stdout remains empty. The DbGate backend still parses that successful output incrementally and never builds an XML DOM.
 
 ## 6. Query Flow
 
@@ -124,7 +124,7 @@ Raw PTY transcripts are never forwarded to application logs. The runner extracts
 2. The SQL gate validates that the request is one supported read-only statement.
 3. The row-limit policy checks or adds a top-level limit.
 4. The backend starts the relay runner and writes SQL to stdin.
-5. The runner opens the relay shell, enters the SSH target, and invokes `mysql --xml`.
+5. The runner opens the relay shell, enters the SSH target, and invokes `mysql --xml --quick --binary-mode`. `--quick` prevents the remote client from buffering the full result, while `--binary-mode` disables most client-side backslash commands when SQL arrives on stdin.
 6. The backend parses XML incrementally and emits DbGate result events.
 7. On completion, the one-shot relay and SSH process exits.
 
@@ -153,7 +153,7 @@ Parsing rules are:
 - Convert `xsi:nil="true"` to JavaScript `null`.
 - Decode XML entities through the XML parser.
 - Preserve newlines and tab characters in normal text values.
-- Preserve duplicate display names while assigning unique internal column keys by ordinal position.
+- Preserve every duplicate-named field by deterministically renaming later occurrences by ordinal position, for example `id`, `id__2`, and `id__3`. DbGate 7.2.1 uses the displayed `columnName` as the grid identity and removes exact duplicates, so preserving identical visible labels would require a DbGate UI change outside this plugin-only MVP.
 - Ignore the `statement` attribute. It contains the full SQL and must never be retained or logged.
 - Treat ordinary values as text in the MVP. Declared table-column types remain available in schema metadata, but arbitrary expression results do not have native protocol type metadata.
 - An empty arbitrary query may have no column names because MySQL XML describes fields inside rows. In that case the grid shows zero rows without inferred columns; table-data tabs can still use schema metadata.
@@ -195,6 +195,7 @@ It rejects:
 - `SELECT ... INTO`, including `INTO OUTFILE` and `INTO DUMPFILE`.
 - Locking reads such as `FOR UPDATE` and `LOCK IN SHARE MODE`.
 - `EXPLAIN` of anything other than a `SELECT`.
+- Unquoted mysql client commands such as `DELIMITER` and `CHARSET`; the target client version still recognizes these commands under `--binary-mode`, so they cannot be allowed to alter client parsing.
 - MySQL executable comments, assignment with `:=`, and high-risk functions such as `LOAD_FILE`, `GET_LOCK`, `RELEASE_LOCK`, `SLEEP`, and `BENCHMARK`.
 
 The validator must tokenize comments, quoted strings, quoted identifiers, and parentheses correctly. A prefix regular expression alone is not sufficient.
@@ -208,11 +209,11 @@ Manual `SELECT` queries return at most 5,000 visible rows.
 - An explicit limit above 5,000 is rejected with a message asking the user to lower it.
 - `SHOW`, `DESC`, and `DESCRIBE` results are locally capped at 5,000 rows.
 
-Opening a table uses DbGate's table-data tab, not a generated editor tab. The backend generates MySQL `LIMIT 100 OFFSET n` queries, and DbGate provides the grid, page navigation, horizontal scrolling, and column resizing. When a primary key exists, pagination orders by all primary-key columns in key order. Without a primary key, pagination uses no synthetic order and may repeat or omit rows if the table changes between page requests.
+Opening a table uses DbGate's table-data tab, not a generated editor tab. With DbGate's default setting, the backend generates MySQL `LIMIT 100 OFFSET n` queries as the user scrolls; DbGate owns the configurable load size, infinite-scroll navigation, horizontal scrolling, and column resizing. When a primary key exists, incremental loading orders by all primary-key columns in key order. Without a primary key, it uses no synthetic order and may repeat or omit rows if the table changes between requests.
 
 ## 10. Metadata Loading
 
-The metadata analyser loads permitted schemas, tables or views, and columns from `information_schema` in one snapshot operation rather than one relay session per table. It includes every non-system schema visible to the configured account and excludes `information_schema`, `performance_schema`, `mysql`, and `sys`.
+The driver first lists every non-system database visible to the configured account, excluding `information_schema`, `performance_schema`, `mysql`, and `sys`. DbGate 7.2.1 then creates a database-scoped connection process for each selected database. Within that process, the metadata analyser loads the database's tables or views and columns from `information_schema` in one snapshot operation rather than one relay session per table.
 
 The snapshot includes:
 
@@ -245,7 +246,7 @@ User-facing messages contain a query ID and safe remediation guidance. Diagnosti
 The MVP runs `dbgate-serve` and the plugin on the user's Mac.
 
 - Pin DbGate Web Community to 7.2.1.
-- Bind the HTTP listener to `127.0.0.1`, not all interfaces.
+- Start DbGate through a repository-provided preload wrapper that binds the HTTP listener to `127.0.0.1`. DbGate 7.2.1's NPM entry calls `server.listen(port)` and does not honor a host environment variable, so the wrapper injects the loopback host before loading `dbgate-serve`; an integration test verifies the actual bound address.
 - Install the plugin through DbGate's external plugin directory; do not rebuild DbGate.
 - Keep relay and database secrets outside the repository and DbGate connection records.
 - Provide a connection test that checks the runner executable, relay path, SSH path, MySQL CLI XML support, and `SELECT 1`.
@@ -274,7 +275,7 @@ Real-path tests use only synthetic queries and known non-sensitive metadata:
 
 - Connection test completes through relay, SSH, and MySQL CLI.
 - A permitted database, table, and column appears in the left browser.
-- Opening a wide table shows a 100-row page with horizontal scrolling and resizable columns.
+- Opening a wide table loads the default 100-row chunk with horizontal scrolling and resizable columns.
 - A manual read-only query displays `NULL`, XML-special text, newlines, tabs, and JSON-like text correctly.
 - A write statement is rejected locally and is never sent to the runner.
 - A result above the row or byte limit is capped, rejected, or aborted according to the policy.
@@ -288,11 +289,12 @@ The MVP is accepted when:
 1. The plugin installs into an unmodified DbGate Web 7.2.1 instance and exposes a `Relay MySQL` driver.
 2. Connection testing reaches MySQL through the existing relay and SSH path.
 3. The left browser lists databases, tables or views, and fields from a cached metadata snapshot.
-4. Opening a table displays a paginated 100-row DbGate grid with horizontal scrolling and resizable columns.
+4. Opening a table displays DbGate's infinite-scroll grid, whose default request is `LIMIT 100 OFFSET n`, with horizontal scrolling and resizable columns.
 5. The SQL editor executes the supported read-only statements and renders results without ASCII-table parsing.
-6. All disallowed statements are rejected before the runner starts.
-7. Limits, timeout behavior, error categories, failed-refresh behavior, and log redaction match this specification.
-8. The plugin can be developed, built, installed, and upgraded independently from the DbGate repository.
+6. Duplicate-named result fields are not dropped and receive deterministic visible names such as `id` and `id__2`.
+7. All disallowed statements are rejected before the runner starts.
+8. Limits, timeout behavior, error categories, failed-refresh behavior, and log redaction match this specification.
+9. The plugin can be developed, built, installed, and upgraded independently from the DbGate repository.
 
 ## 15. Deferred Improvements
 
