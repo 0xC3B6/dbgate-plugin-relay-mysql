@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -u
+
+if [ -n "${HOME:-}" ]; then
+  printf '%s' "$$" >"${HOME}/relay.pid"
+fi
+
+case "${1:-ok}" in
+  fail)
+    printf 'relay authentication failed\n'
+    exit 1
+    ;;
+  hang)
+    sleep 60
+    exit 1
+    ;;
+esac
+
+export PS1='FAKE_RELAY> '
+exec /bin/bash --noprofile --norc -i

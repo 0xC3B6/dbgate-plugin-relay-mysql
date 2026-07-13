@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<resultset statement="SELECT highly_private_sql">
+  <row><field name="secret">highly_private_value</row>
+</resultset>

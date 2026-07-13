@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -u
+
+mode=ok
+for argument in "$@"; do
+  case "$argument" in
+    fail@*) mode=fail ;;
+    hang@*) mode=hang ;;
+  esac
+done
+
+case "$mode" in
+  fail)
+    printf 'Permission denied\n'
+    exit 255
+    ;;
+  hang)
+    sleep 60
+    exit 255
+    ;;
+esac
+
+export PS1='FAKE_SSH> '
+exec /bin/bash --noprofile --norc -i
