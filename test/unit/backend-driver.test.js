@@ -134,7 +134,7 @@ test('backend driver materializes and cleans an inline connection profile', asyn
   assert.equal(inlineProfiles[0].cleaned, true);
 });
 
-test('query routes DbGate ranges while background version and database probes stay local', async () => {
+test('query routes DbGate ranges while database discovery still lists all permitted databases', async () => {
   const { calls, driver } = createHarness();
   const handle = await driver.connect({
     relayProfile: 'profile', runnerPath: '/synthetic/runner', defaultDatabase: 'fixture_db',
@@ -156,7 +156,7 @@ test('query routes DbGate ranges while background version and database probes st
   });
   assert.equal((await driver.getVersion(handle)).version, 'relay-session');
   assert.deepEqual(await driver.listDatabases(handle), [{ name: 'fixture_db' }]);
-  assert.deepEqual(calls.internal, []);
+  assert.deepEqual(calls.internal, ['SHOW DATABASES']);
 });
 
 test('full analysis forces refresh while incremental analysis observes TTL cache', async () => {
