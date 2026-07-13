@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "profiles": {
+    "default": {
+      "relayCommand": "/path/to/relay-cli",
+      "relayArgs": ["login", "-u", "your-relay-user"],
+      "relayPrompt": "RELAY> \\$",
+      "relayPasswordPrompt": "(?i)password:",
+      "relayPasswordEnv": "DBGATE_RELAY_DEFAULT_PASSWORD",
+      "sshTarget": "reader@example.invalid",
+      "sshPrompt": "REMOTE> \\$",
+      "sshPasswordPrompt": "(?i)password:",
+      "sshPasswordEnv": "DBGATE_SSH_DEFAULT_PASSWORD",
+      "mysqlCommand": "mysql",
+      "mysqlHost": "127.0.0.1",
+      "mysqlPort": 3306,
+      "mysqlUserEnv": "DBGATE_MYSQL_DEFAULT_USER",
+      "mysqlPasswordEnv": "DBGATE_MYSQL_DEFAULT_PASSWORD"
+    }
+  }
+}

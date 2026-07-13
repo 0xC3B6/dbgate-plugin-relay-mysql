@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -u
+
+audit_file="${HOME}/mysql-audit.txt"
+sql_file="${HOME}/mysql-sql.txt"
+if [ -n "${HOME:-}" ]; then
+  {
+    printf 'argc=%s\n' "$#"
+    for argument in "$@"; do printf 'arg=%s\n' "$argument"; done
+    if [ -n "${MYSQL_PWD:-}" ]; then printf 'password_env=present\n'; else printf 'password_env=missing\n'; fi
+    if [ -n "${LEAK_SENTINEL:-}" ]; then printf 'leak=present\n'; else printf 'leak=absent\n'; fi
+  } >"$audit_file"
+fi
+
+sql="$(cat)"
+if [ -n "${HOME:-}" ]; then
+  printf '%s' "$sql" >"$sql_file"
+fi
+
+case "$sql" in
+  *CONNECTION_FAILURE*)
+    printf 'ERROR 2002 (HY000): Cannot connect\n' >&2
+    exit 1
+    ;;
+  *SQL_FAILURE*)
+    printf 'ERROR 1064 (42000): Query rejected\n' >&2
+    exit 1
+    ;;
+  *OVERSIZED_RESULT*)
+    printf '<?xml version="1.0"?><resultset><row><field name="payload">'
+    /usr/bin/yes x | /usr/bin/head -c 33554433
+    printf '</field></row></resultset>\n'
+    exit 0
+    ;;
+esac
+
+printf '%s\n' '<?xml version="1.0"?>'
+printf '%s\n' '<resultset statement="SELECT 1">'
+printf '%s\n' '  <row><field name="answer">1</field></row>'
+printf '%s\n' '</resultset>'

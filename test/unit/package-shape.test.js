@@ -17,7 +17,9 @@ test('manifest declares an external DbGate plugin with bundled entry points', ()
     'dist',
     'bin',
     'runner',
-    'config',
+    'config/profile.example.json',
+    'scripts/smoke-relay.js',
+    'src',
     'README.md',
     'LICENSE',
     'icon.svg',
@@ -38,4 +40,3 @@ test('source and build configuration expose frontend, backend, and runner entrie
   const webpackConfig = require('../../webpack-backend.config');
   assert.deepEqual(Object.keys(webpackConfig.entry).sort(), ['backend', 'runner']);
 });
-

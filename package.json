@@ -10,13 +10,16 @@
     "dist",
     "bin",
     "runner",
-    "config",
+    "config/profile.example.json",
+    "scripts/smoke-relay.js",
+    "src",
     "README.md",
     "LICENSE",
     "icon.svg"
   ],
   "scripts": {
-    "test": "node --test --test-concurrency=1",
+    "pretest": "npm run build",
+    "test": "node --test --test-concurrency=1 test/unit/*.test.js test/integration/*.test.js",
     "build:frontend": "webpack --config webpack-frontend.config.js",
     "build:backend": "webpack --config webpack-backend.config.js",
     "build": "npm run build:frontend && npm run build:backend",
@@ -25,7 +28,7 @@
     "plugout": "dbgate-plugout dbgate-plugin-relay-mysql",
     "plugin:install-local": "node scripts/install-local.js",
     "start:local": "node scripts/start-local.js",
-    "test:e2e": "node scripts/install-local.js --clean && playwright test",
+    "test:e2e": "node scripts/run-e2e.js",
     "smoke:relay": "node scripts/smoke-relay.js"
   },
   "engines": {
@@ -55,4 +58,3 @@
     "webpack-cli": "7.2.1"
   }
 }
-

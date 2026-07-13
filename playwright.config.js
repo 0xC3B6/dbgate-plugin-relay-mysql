@@ -4,6 +4,7 @@ const path = require('node:path');
 const { defineConfig } = require('@playwright/test');
 
 const root = __dirname;
+const e2eWorkspace = path.join(root, '.local', 'dbgate-e2e');
 
 module.exports = defineConfig({
   testDir: path.join(root, 'test', 'e2e'),
@@ -22,7 +23,7 @@ module.exports = defineConfig({
     env: {
       ...process.env,
       PORT: '3100',
-      WORKSPACE_DIR: path.join(root, '.local', 'dbgate'),
+      WORKSPACE_DIR: e2eWorkspace,
       LANGUAGE: 'en',
       CONSOLE_LOG_LEVEL: 'warn',
       FILE_LOG_LEVEL: 'warn',
@@ -36,4 +37,3 @@ module.exports = defineConfig({
     },
   },
 });
-

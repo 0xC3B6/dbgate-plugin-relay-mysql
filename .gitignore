@@ -9,3 +9,5 @@ test-results/
 *.log
 .env
 .env.*
+config/*.json
+!config/profile.example.json
