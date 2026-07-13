@@ -1,0 +1,11 @@
+node_modules/
+.npm-cache/
+dist/
+.local/
+*.tgz
+playwright-report/
+test-results/
+.DS_Store
+*.log
+.env
+.env.*

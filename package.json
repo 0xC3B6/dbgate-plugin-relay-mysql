@@ -1,0 +1,58 @@
+{
+  "name": "dbgate-plugin-relay-mysql",
+  "version": "0.1.0",
+  "description": "Read-only DbGate MySQL driver over relay-cli and SSH",
+  "main": "dist/backend.js",
+  "bin": {
+    "relay-mysql-runner": "bin/relay-mysql-runner.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "runner",
+    "config",
+    "README.md",
+    "LICENSE",
+    "icon.svg"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=1",
+    "build:frontend": "webpack --config webpack-frontend.config.js",
+    "build:backend": "webpack --config webpack-backend.config.js",
+    "build": "npm run build:frontend && npm run build:backend",
+    "prepack": "npm run build",
+    "plugin": "npm pack && dbgate-plugin dbgate-plugin-relay-mysql",
+    "plugout": "dbgate-plugout dbgate-plugin-relay-mysql",
+    "plugin:install-local": "node scripts/install-local.js",
+    "start:local": "node scripts/start-local.js",
+    "test:e2e": "node scripts/install-local.js --clean && playwright test",
+    "smoke:relay": "node scripts/smoke-relay.js"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xC3B6/dbgate-plugin-relay-mysql.git"
+  },
+  "license": "GPL-3.0-only",
+  "keywords": [
+    "dbgate",
+    "dbgateplugin",
+    "mysql",
+    "relay",
+    "ssh"
+  ],
+  "dependencies": {
+    "dbgate-query-splitter": "4.12.0",
+    "saxes": "6.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "dbgate-plugin-tools": "1.0.8",
+    "dbgate-serve": "7.2.1",
+    "webpack": "5.108.4",
+    "webpack-cli": "7.2.1"
+  }
+}
+

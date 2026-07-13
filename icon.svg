@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Relay MySQL">
+  <rect x="7" y="9" width="38" height="46" rx="8" fill="#2563eb"/>
+  <ellipse cx="26" cy="18" rx="13" ry="5" fill="#bfdbfe"/>
+  <path d="M13 18v11c0 3 6 5 13 5s13-2 13-5V18M13 29v11c0 3 6 5 13 5 3 0 6-.4 8-1.2" fill="none" stroke="#fff" stroke-width="3"/>
+  <rect x="34" y="34" width="23" height="21" rx="4" fill="#0f172a"/>
+  <path d="M40 34v-4a5.5 5.5 0 0 1 11 0v4" fill="none" stroke="#0f172a" stroke-width="4"/>
+  <circle cx="45.5" cy="44" r="2.5" fill="#fff"/>
+  <path d="M45.5 46.5V50" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
+
