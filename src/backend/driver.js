@@ -4,7 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
 const frontendDriver = require('../frontend/driver');
+const { ProfileError } = require('../runner/profile-store');
 const { RelayMysqlError } = require('./errors');
+const { createInlineProfileFile: createInlineProfileFileDefault } = require('./inline-profile-file');
 const { MetadataCache } = require('./metadata-cache');
 const { MetadataSnapshotService, SYSTEM_DATABASES } = require('./metadata-snapshot');
 const { QueryExecutor } = require('./query-executor');
@@ -44,6 +46,7 @@ function createBackendDriver(dependencies = {}) {
   const metadataCache = dependencies.metadataCache || new MetadataCache();
   const metadataService =
     dependencies.metadataService || new MetadataSnapshotService({ queryExecutor, cache: metadataCache });
+  const createInlineProfileFile = dependencies.createInlineProfileFile || createInlineProfileFileDefault;
 
   return {
     ...backendDriverBase,
@@ -54,17 +57,39 @@ function createBackendDriver(dependencies = {}) {
     },
 
     async connect(props = {}) {
-      const relayProfile = String(props.relayProfile || '').trim();
-      if (!relayProfile) {
-        throw new RelayMysqlError('relay_login', 'Relay profile is required');
-      }
       const runnerPath = String(props.runnerPath || '').trim() || resolveDefaultRunnerPath();
       const timeoutMs = normalizeTimeout(props.timeoutMs);
+      let relayProfile;
+      let profileFile;
+      let cleanupProfile;
+
+      if (props.useInlineProfile === true) {
+        let inlineProfile;
+        try {
+          inlineProfile = createInlineProfileFile(props);
+        } catch (error) {
+          const message = error instanceof ProfileError
+            ? error.message
+            : 'UI-managed Relay profile could not be prepared';
+          throw new RelayMysqlError('runner', message);
+        }
+        relayProfile = inlineProfile.profileName;
+        profileFile = inlineProfile.filePath;
+        cleanupProfile = inlineProfile.cleanup;
+      } else {
+        relayProfile = String(props.relayProfile || '').trim();
+        if (!relayProfile) {
+          throw new RelayMysqlError('relay_login', 'Relay profile is required');
+        }
+      }
+
       const client = { relayProfile, runnerPath, timeoutMs };
       return {
         client,
+        cleanupProfile,
         conid: props.conid,
         database: props.database || props.defaultDatabase || null,
+        profileFile,
         relayProfile,
         runnerPath,
         timeoutMs,
@@ -73,7 +98,16 @@ function createBackendDriver(dependencies = {}) {
     },
 
     async close(dbhan) {
-      if (dbhan) dbhan.closed = true;
+      if (!dbhan) return;
+      dbhan.closed = true;
+      const cleanupProfile = dbhan.cleanupProfile;
+      dbhan.cleanupProfile = null;
+      try {
+        cleanupProfile?.();
+      } catch (_error) {
+        // Best-effort cleanup must not prevent DbGate from closing the
+        // logical connection.
+      }
     },
 
     async query(dbhan, sql, options = {}) {

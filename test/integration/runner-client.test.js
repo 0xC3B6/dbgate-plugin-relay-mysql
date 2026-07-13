@@ -44,6 +44,23 @@ test('runner client passes protocol fields as args and SQL only through stdin', 
   assert.equal(result.stderr.length, 0);
 });
 
+test('runner client passes an inline profile file only through the dedicated runner flag', async () => {
+  const calls = [];
+  const client = new RunnerClient({
+    prefixArgs: [fixture],
+    randomUUID: () => 'request-fixture',
+    spawn(command, args, options) {
+      calls.push({ command, args, options });
+      return require('node:child_process').spawn(command, args, options);
+    },
+  });
+  const profileFile = '/private/inline-profile.json';
+  await run(client, { profileFile });
+  const index = calls[0].args.indexOf('--profile-file');
+  assert.notEqual(index, -1);
+  assert.equal(calls[0].args[index + 1], profileFile);
+});
+
 test('runner client maps structured runner failures without exposing stderr JSON', async () => {
   const client = new RunnerClient({ prefixArgs: [fixture], randomUUID: () => 'request-fixture' });
   await assert.rejects(

@@ -9,6 +9,28 @@ const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const COMMAND = /^[A-Za-z0-9_./+-]+$/;
 const SSH_TARGET = /^[A-Za-z0-9_.@%:+-]+$/;
 const HOST = /^[A-Za-z0-9_.:%-]+$/;
+const STORED_PROFILE_FIELDS = new Set([
+  'relayCommand',
+  'relayArgs',
+  'relayPrompt',
+  'relayPasswordPrompt',
+  'relayPasswordEnv',
+  'sshTarget',
+  'sshPrompt',
+  'sshPasswordPrompt',
+  'sshPasswordEnv',
+  'mysqlCommand',
+  'mysqlHost',
+  'mysqlPort',
+  'mysqlUserEnv',
+  'mysqlPasswordEnv',
+]);
+const INLINE_SECRET_FIELDS = new Set([
+  'relayPassword',
+  'sshPassword',
+  'mysqlUser',
+  'mysqlPassword',
+]);
 
 class ProfileError extends Error {
   constructor(message) {
@@ -41,19 +63,20 @@ function resolveEnv(profile, key, env, { optional = false } = {}) {
   return value;
 }
 
-function validateProfile(profile, env) {
+function validateStoredProfile(profile) {
   if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
     throw new ProfileError('profile is invalid');
   }
-  for (const forbidden of ['relayPassword', 'sshPassword', 'mysqlPassword']) {
-    if (Object.hasOwn(profile, forbidden)) throw new ProfileError('profile contains an inline secret');
+  for (const field of Object.keys(profile)) {
+    if (INLINE_SECRET_FIELDS.has(field)) throw new ProfileError('profile contains an inline secret');
+    if (!STORED_PROFILE_FIELDS.has(field)) throw new ProfileError('profile contains an unknown field');
   }
 
   const relayArgs = profile.relayArgs ?? [];
   if (!Array.isArray(relayArgs) || relayArgs.length > 32) throw new ProfileError('relayArgs is invalid');
   const checkedArgs = relayArgs.map((arg) => {
     const value = assertString(arg, 'relay argument', null, { max: 2048 });
-    if (/[/\x00-\x1f\x7f]/.test(value) && /[\r\n\x00]/.test(value)) throw new ProfileError('relay argument is invalid');
+    if (/[\x00-\x1f\x7f]/.test(value)) throw new ProfileError('relay argument is invalid');
     return value;
   });
 
@@ -62,24 +85,36 @@ function validateProfile(profile, env) {
 
   return Object.freeze({
     relayCommand: assertString(profile.relayCommand, 'relayCommand', COMMAND),
-    relayArgs: checkedArgs,
+    relayArgs: Object.freeze(checkedArgs),
     relayPrompt: assertString(profile.relayPrompt, 'relayPrompt', null, { max: 512 }),
     relayPasswordPrompt: assertString(profile.relayPasswordPrompt ?? '(?i)password:', 'relayPasswordPrompt', null, { max: 512 }),
-    relayPassword: resolveEnv(profile, 'relayPassword', env, { optional: true }),
-    relayPasswordEnv: profile.relayPasswordEnv || '',
+    relayPasswordEnv: assertString(profile.relayPasswordEnv, 'relayPasswordEnv', ENV_NAME, { optional: true, max: 128 }),
     sshTarget: assertString(profile.sshTarget, 'sshTarget', SSH_TARGET),
     sshPrompt: assertString(profile.sshPrompt, 'sshPrompt', null, { max: 512 }),
     sshPasswordPrompt: assertString(profile.sshPasswordPrompt ?? '(?i)password:', 'sshPasswordPrompt', null, { max: 512 }),
-    sshPassword: resolveEnv(profile, 'sshPassword', env, { optional: true }),
-    sshPasswordEnv: profile.sshPasswordEnv || '',
+    sshPasswordEnv: assertString(profile.sshPasswordEnv, 'sshPasswordEnv', ENV_NAME, { optional: true, max: 128 }),
     mysqlCommand: assertString(profile.mysqlCommand ?? 'mysql', 'mysqlCommand', COMMAND),
     mysqlHost: assertString(profile.mysqlHost, 'mysqlHost', HOST),
-    mysqlPort: String(port),
-    mysqlUser: resolveEnv(profile, 'mysqlUser', env),
-    mysqlUserEnv: profile.mysqlUserEnv,
-    mysqlPassword: resolveEnv(profile, 'mysqlPassword', env),
-    mysqlPasswordEnv: profile.mysqlPasswordEnv,
+    mysqlPort: port,
+    mysqlUserEnv: assertString(profile.mysqlUserEnv, 'mysqlUserEnv', ENV_NAME, { max: 128 }),
+    mysqlPasswordEnv: assertString(profile.mysqlPasswordEnv, 'mysqlPasswordEnv', ENV_NAME, { max: 128 }),
   });
+}
+
+function materializeProfile(profile, env = process.env) {
+  const stored = validateStoredProfile(profile);
+  return Object.freeze({
+    ...stored,
+    mysqlPort: String(stored.mysqlPort),
+    relayPassword: resolveEnv(stored, 'relayPassword', env, { optional: true }),
+    sshPassword: resolveEnv(stored, 'sshPassword', env, { optional: true }),
+    mysqlUser: resolveEnv(stored, 'mysqlUser', env),
+    mysqlPassword: resolveEnv(stored, 'mysqlPassword', env),
+  });
+}
+
+function validateProfile(profile, env) {
+  return materializeProfile(profile, env);
 }
 
 function loadProfile(profileName, options = {}) {
@@ -103,11 +138,23 @@ function loadProfile(profileName, options = {}) {
   } catch {
     throw new ProfileError('profile file is not valid JSON');
   }
-  if (document?.version !== 1 || !document.profiles || typeof document.profiles !== 'object') {
+  if (
+    document?.version !== 1 ||
+    !document.profiles ||
+    typeof document.profiles !== 'object' ||
+    Array.isArray(document.profiles)
+  ) {
     throw new ProfileError('profile file version is unsupported');
   }
   if (!Object.hasOwn(document.profiles, profileName)) throw new ProfileError('profile does not exist');
   return validateProfile(document.profiles[profileName], options.env || process.env);
 }
 
-module.exports = { ProfileError, defaultProfilePath, loadProfile, validateProfile };
+module.exports = {
+  ProfileError,
+  defaultProfilePath,
+  loadProfile,
+  materializeProfile,
+  validateProfile,
+  validateStoredProfile,
+};

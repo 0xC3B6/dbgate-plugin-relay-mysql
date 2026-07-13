@@ -85,6 +85,7 @@ class RunnerClient {
       '--profile',
       String(options.relayProfile),
     ];
+    if (options.profileFile) args.push('--profile-file', String(options.profileFile));
     if (options.database) args.push('--database', String(options.database));
     args.push('--timeout-ms', String(timeoutMs));
 

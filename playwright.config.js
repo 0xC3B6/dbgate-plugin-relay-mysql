@@ -5,6 +5,10 @@ const { defineConfig } = require('@playwright/test');
 
 const root = __dirname;
 const e2eWorkspace = path.join(root, '.local', 'dbgate-e2e');
+const serverEnvironment = { ...process.env };
+delete serverEnvironment.CONNECTIONS;
+delete serverEnvironment.SINGLE_CONNECTION;
+delete serverEnvironment.SINGLE_DATABASE;
 
 module.exports = defineConfig({
   testDir: path.join(root, 'test', 'e2e'),
@@ -21,19 +25,12 @@ module.exports = defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
-      ...process.env,
+      ...serverEnvironment,
       PORT: '3100',
       WORKSPACE_DIR: e2eWorkspace,
       LANGUAGE: 'en',
       CONSOLE_LOG_LEVEL: 'warn',
       FILE_LOG_LEVEL: 'warn',
-      CONNECTIONS: 'relay',
-      ENGINE_relay: 'relay-mysql@dbgate-plugin-relay-mysql',
-      LABEL_relay: 'Relay fixture',
-      READONLY_relay: '1',
-      CONNECTION_relay_relayProfile: 'fixture',
-      CONNECTION_relay_runnerPath: path.join(root, 'test', 'fixtures', 'fake-runner.js'),
-      CONNECTION_relay_timeoutMs: '5000',
     },
   },
 });

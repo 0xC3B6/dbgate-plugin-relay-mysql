@@ -50,9 +50,24 @@ function createHarness() {
       return metadataFresh;
     },
   };
+  const inlineProfiles = [];
+  const createInlineProfileFile = connection => {
+    const profile = {
+      connection,
+      filePath: `/private/profile-${inlineProfiles.length + 1}.json`,
+      profileName: 'inline',
+      cleaned: false,
+      cleanup() {
+        profile.cleaned = true;
+      },
+    };
+    inlineProfiles.push(profile);
+    return profile;
+  };
   return {
     calls,
-    driver: createBackendDriver({ queryExecutor, metadataService, runnerClient: {} }),
+    driver: createBackendDriver({ queryExecutor, metadataService, runnerClient: {}, createInlineProfileFile }),
+    inlineProfiles,
     expireMetadata() {
       metadataFresh = false;
     },
@@ -90,6 +105,32 @@ test('backend driver rejects missing profile and invalid timeout without startin
     driver.connect({ relayProfile: 'profile', timeoutMs: 10 }),
     error => error.category === 'runner'
   );
+});
+
+test('backend driver materializes and cleans an inline connection profile', async () => {
+  const { driver, inlineProfiles } = createHarness();
+  const handle = await driver.connect({
+    conid: 'inline-fixture',
+    useInlineProfile: true,
+    relayCommand: '/safe/relay-cli',
+    relayArgs: ['login'],
+    relayPrompt: 'RELAY> $',
+    sshTarget: 'reader@example.invalid',
+    sshPrompt: 'REMOTE> $',
+    mysqlHost: '127.0.0.1',
+    mysqlUserEnv: 'TEST_MYSQL_USER',
+    mysqlPasswordEnv: 'TEST_MYSQL_PASSWORD',
+  });
+
+  assert.equal(inlineProfiles.length, 1);
+  assert.equal(handle.relayProfile, 'inline');
+  assert.equal(handle.profileFile, '/private/profile-1.json');
+  assert.equal(handle.client.profileFile, undefined);
+  assert.equal(inlineProfiles[0].cleaned, false);
+  await driver.close(handle);
+  assert.equal(inlineProfiles[0].cleaned, true);
+  await driver.close(handle);
+  assert.equal(inlineProfiles[0].cleaned, true);
 });
 
 test('query routes DbGate ranges through table-data policy and filters system databases', async () => {

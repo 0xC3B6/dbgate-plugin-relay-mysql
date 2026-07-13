@@ -37,9 +37,33 @@ test('frontend driver exposes a read-only Relay MySQL connection form', () => {
   assert.deepEqual(richCommands[0].trimStart, { position: 0, line: 0, column: 0 });
   assert.deepEqual(
     driver.getAdvancedConnectionFields().map(field => field.name),
-    ['relayProfile', 'runnerPath', 'timeoutMs']
+    [
+      'useInlineProfile',
+      'relayProfile',
+      'relayCommand',
+      'relayArgs',
+      'relayPrompt',
+      'relayPasswordPrompt',
+      'relayPasswordEnv',
+      'sshTarget',
+      'sshPrompt',
+      'sshPasswordPrompt',
+      'sshPasswordEnv',
+      'mysqlCommand',
+      'mysqlHost',
+      'mysqlPort',
+      'mysqlUserEnv',
+      'mysqlPasswordEnv',
+      'runnerPath',
+      'timeoutMs',
+    ]
   );
-  assert.equal(driver.getAdvancedConnectionFields()[0].default, 'default');
+  assert.equal(driver.getAdvancedConnectionFields()[0].type, 'checkbox');
+  assert.equal(driver.getAdvancedConnectionFields()[0].default, false);
+  assert.equal(driver.getAdvancedConnectionFields()[1].default, 'default');
+  assert.equal(driver.getAdvancedConnectionFields()[1].disabledFn({ useInlineProfile: true }), true);
+  assert.equal(driver.getAdvancedConnectionFields()[2].disabledFn({ useInlineProfile: false }), true);
+  assert.equal(driver.getAdvancedConnectionFields()[2].disabledFn({ useInlineProfile: true }), false);
 });
 
 test('connection save removes secret-shaped fields and forces readonly', () => {
@@ -60,6 +84,11 @@ test('connection save removes secret-shaped fields and forces readonly', () => {
     httpProxyPassword: 'not-persisted',
     sshKeyfilePassword: 'not-persisted',
     sslKeyFilePassword: 'not-persisted',
+    relayPassword: 'not-persisted',
+    sshPassword: 'not-persisted',
+    mysqlUser: 'not-persisted',
+    mysqlPassword: 'not-persisted',
+    profileFile: '/not/persisted',
   };
   const saved = driver.beforeConnectionSave(source);
 
@@ -75,6 +104,11 @@ test('connection save removes secret-shaped fields and forces readonly', () => {
   assert.equal(saved.httpProxyPassword, undefined);
   assert.equal(saved.sshKeyfilePassword, undefined);
   assert.equal(saved.sslKeyFilePassword, undefined);
+  assert.equal(saved.relayPassword, undefined);
+  assert.equal(saved.sshPassword, undefined);
+  assert.equal(saved.mysqlUser, undefined);
+  assert.equal(saved.mysqlPassword, undefined);
+  assert.equal(saved.profileFile, undefined);
   assert.equal(saved.useDatabaseUrl, false);
   assert.equal(saved.useSshTunnel, false);
   assert.equal(saved.useSsl, false);

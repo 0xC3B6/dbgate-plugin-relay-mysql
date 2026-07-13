@@ -11,6 +11,7 @@ The plugin never opens a direct MySQL TCP connection. Each request starts a fres
 - DbGate table tabs with 100-row incremental loading by default.
 - Streaming XML parsing with `NULL`, Unicode, XML entities, newlines, tabs, and duplicate column names preserved.
 - A 5,000-row cap for manual results and a fixed 32 MiB XML-result limit.
+- Relay, SSH, and MySQL routing settings managed in each DbGate connection.
 - Local-only DbGate launcher bound to `127.0.0.1`.
 
 This MVP is tested against DbGate Web Community 7.2.1. Other DbGate versions are not yet a compatibility promise.
@@ -38,7 +39,35 @@ Then open <http://127.0.0.1:3100>. The install command builds and copies the ext
 
 The repository launcher sets DbGate console and file logging to `warn` by default because DbGate itself includes SQL text in lower-level logs. Overriding `CONSOLE_LOG_LEVEL`, `FILE_LOG_LEVEL`, or `LOG_LEVEL` with `info`/`debug` can persist SQL outside this plugin. DbGate may also retain SQL editor/tab state as part of its normal workspace behavior, so SQL text should never contain credentials.
 
-## Configure a relay profile
+## Add a UI-managed connection
+
+Start DbGate without `CONNECTIONS`, `SINGLE_CONNECTION`, or other connection-injection variables, then use **+ → Connection → Relay MySQL**. DbGate 7.2.1 does not expose a plugin API for adding a separate profile-management page, so the native connection list is the profile manager: one Relay MySQL connection represents one complete Relay/SSH/MySQL route.
+
+In the connection editor:
+
+1. Open **Advanced** and enable **Manage Relay, SSH and MySQL settings in this connection**.
+2. Fill the relay command, one relay argument per row, prompt patterns, SSH target, and MySQL host/port.
+3. For each required credential, enter only the environment-variable name, such as `DBGATE_MYSQL_WAF_PASSWORD`—never its value.
+4. Set **Default database** on the General tab if the connection should open one database by default.
+5. Use **Test**, then **Save** or **Connect**.
+
+Export the named secret values in the shell that starts DbGate:
+
+```bash
+export DBGATE_RELAY_WAF_PASSWORD='...'
+export DBGATE_SSH_WAF_PASSWORD='...'
+export DBGATE_MYSQL_WAF_USER='...'
+export DBGATE_MYSQL_WAF_PASSWORD='...'
+npm run start:local
+```
+
+If relay or SSH authentication is already handled by the surrounding session, leave the corresponding password-environment-variable field empty. Do not place credentials in relay arguments; process arguments may be visible to other local processes.
+
+DbGate saves the non-secret routing fields and environment-variable names in its local connection record. On connect, the plugin writes that non-secret profile to a private temporary file for the bundled runner, resolves credential values from the DbGate process environment, and removes the file when the connection closes.
+
+## `profiles.json` compatibility mode
+
+Existing file-based profiles remain supported. Leave **Manage Relay, SSH and MySQL settings in this connection** disabled and set **Local profile name** to the profile key in `profiles.json`.
 
 Copy `config/profile.example.json` to the default private location:
 
@@ -60,20 +89,17 @@ export DBGATE_MYSQL_DEFAULT_PASSWORD='...'
 npm run start:local
 ```
 
-If relay or SSH authentication is already handled by the surrounding session, omit the corresponding `*PasswordEnv` field. Do not place credentials in `relayArgs`; process arguments may be visible to other local processes.
+If relay or SSH authentication is already handled by the surrounding session, omit the corresponding `*PasswordEnv` field.
 
 To keep the profile elsewhere, set `DBGATE_RELAY_MYSQL_PROFILE_FILE` to its absolute path before starting DbGate. Do not commit the profile or secret environment files.
 
-## Add the DbGate connection
+The remaining connection settings are the same in both modes:
 
-In DbGate, create a connection with engine **Relay MySQL** and set:
+- **Default database** is optional. Leaving it empty lets the left tree list every permitted non-system database.
+- **Runner executable path** is normally empty, which uses the bundled runner.
+- **Query timeout** defaults to 30,000 ms and covers the complete one-shot chain.
 
-- **Relay profile**: the profile key from `profiles.json`; default is `default`.
-- **Default database**: optional. Leaving it empty lets the left tree list every permitted non-system database.
-- **Runner executable path**: normally empty, which uses the bundled runner.
-- **Query timeout**: defaults to 30,000 ms and covers the complete one-shot chain.
-
-The connection form deliberately has no relay, SSH, or MySQL password fields. Separate DbGate connections may use separate profile names.
+The form deliberately has no relay, SSH, or MySQL password-value fields. Separate DbGate connections may use separate routing settings and environment-variable names.
 
 The same real connection can be injected at startup instead of saved through the UI:
 
@@ -126,12 +152,10 @@ Use `--profile-file /absolute/path/profiles.json`, `--timeout-ms 30000`, or `--r
 
 - Success stdout is complete XML only; failure stdout is empty and stderr is one sanitized JSON object.
 - SQL is sent to the runner over stdin in bounded Base64 frames, never in its process arguments.
-- Relay, SSH, MySQL credentials are not stored in DbGate connection records.
+- Relay, SSH, and MySQL credential values are not stored in DbGate connection records; UI-managed records contain only environment-variable names.
 - Raw PTY transcripts, SQL, XML, result values, and credentials are not logged by this plugin.
 - The remote mysql process receives its password through `MYSQL_PWD`; this avoids argv exposure but is not a substitute for a least-privilege account.
 - Binary values and XML-invalid control bytes are unsupported in the MVP. Query binary values explicitly with `HEX(column)`.
-
-See `docs/superpowers/specs/2026-07-13-dbgate-relay-mysql-plugin-design.md` for the approved design and deferred improvements.
 
 ## License
 
