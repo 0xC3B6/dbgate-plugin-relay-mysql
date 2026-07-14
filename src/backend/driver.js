@@ -211,7 +211,6 @@ function createBackendDriver(dependencies = {}) {
     },
 
     async listDatabases(dbhan) {
-      if (dbhan.database) return [{ name: String(dbhan.database) }];
       const result = await queryExecutor.executeInternal(dbhan, 'SHOW DATABASES', {
         maxRows: null,
         collectRows: true,
