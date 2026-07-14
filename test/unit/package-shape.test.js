@@ -21,9 +21,11 @@ test('manifest declares an external DbGate plugin with bundled entry points', ()
     'scripts/smoke-relay.js',
     'src',
     'README.md',
+    'README.zh-CN.md',
     'LICENSE',
     'icon.svg',
   ]);
+  assert.equal(fs.existsSync(path.join(root, 'README.zh-CN.md')), true);
 });
 
 test('source and build configuration expose frontend, backend, and runner entries', () => {

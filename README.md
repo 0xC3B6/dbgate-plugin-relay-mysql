@@ -1,5 +1,7 @@
 # DbGate Relay MySQL Plugin
 
+English | [简体中文](README.zh-CN.md)
+
 `dbgate-plugin-relay-mysql` is a read-only external driver for DbGate Web 7.2.1. It keeps the existing access path—local `relay-cli`, an interactive relay shell, SSH, and the remote `mysql` CLI—while reusing DbGate's database tree, SQL editor, and data grid.
 
 The plugin never opens a direct MySQL TCP connection. With the bundled runner, a private local broker keeps one Relay/SSH session per complete profile and starts only the remote `mysql --xml` command for each query. The session is recycled after one hour without a query. This makes wide results render as a normal horizontally scrollable, resizable grid without requiring Touch ID for every query.
